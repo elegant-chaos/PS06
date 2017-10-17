@@ -13,15 +13,12 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE, fig.width=8, fig.height=4.5, message=FALSE, warning = FALSE
-  )
-set.seed(76)
-
 # Load packages
 library(tidyverse)
 library(broom)
 library(knitr)
+
+opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4.5, message=FALSE, warning = FALSE)
 ```
 
 
@@ -96,7 +93,57 @@ n_sample <- 10000
 # Computation
 
 ```{r}
+set.seed(100)
 
+#Function estimates for test_set x values using a set of smooth.spline models with 
+#df = 2 and df = 99 after generating new data and fitting models to the new data
+
+get_estimate <- function(f,n,sigma,test_set){
+  sample <- generate_sample(f,n,sigma)
+  model_df2 <- smooth.spline(sample$x, sample$y, df=2)
+  predict_df2 <- predict(model_df2, test_set$x)
+  
+  model_df99 <- smooth.spline(sample$x, sample$y, df=99)
+  predict_df99 <- predict(model_df99, test_set$x)
+  
+  toReturn <- c(predict_df2, predict_df99)
+  
+  return(toReturn)
+}
+
+#Get 10000 estimates for x0
+estimatesTest <- mosaic::do(n_sample)*get_estimate(f,n,sigma,test_set)
+estimates_df2 <- as.vector(unlist(estimatesTest$y))
+estimates_df99 <- as.vector(unlist(estimatesTest$y.1))
+estimates <- cbind(estimates_df2,estimates_df99)
+
+#Generate 10000 y-observed (f(x) + epsilon)
+y_observed <- mosaic::do(n_sample)*(f(test_set$x) + rnorm(1,mean=0,sd=0.3))
+estimates <- estimates %>% cbind(y_observed) %>% rename(y_observed = result)
+
+#Calculating MSE for each model
+estimates <- estimates %>% mutate(resid_df2 = (y_observed - estimates_df2)^2, 
+                                  resid_df99 = (y_observed-estimates_df99)^2)
+MSE <- estimates %>% summarise(MSE_df2 = mean(resid_df2), MSE_df99 =mean(resid_df99))
+
+#Calculating the variance for each model
+var_obs <- estimates %>% summarise(var_df2 = var(estimates_df2), 
+                                           var_df99 = var(estimates_df99))
+
+#Calculating the squared bias for each model
+squared_bias <- estimates %>% summarise(mean_df2 = mean(estimates_df2), 
+                                        mean_df99 = mean(estimates_df99)) %>% 
+  mutate(bias_df2 = (0.95 - mean_df2)^2,bias_df99 = (0.95 - mean_df99)^2) %>% 
+  select(bias_df2, bias_df99)
+
+#Combining into one data frame
+sum <- c(sum_df2 = var_obs$var_df2 + squared_bias$bias_df2 + 0.09,
+         sum_df99 = var_obs$var_df99 + squared_bias$bias_df99 + 0.09)
+
+error_tbl <- rbind(df2 = c(MSE$MSE_df2,var_obs$var_df2,squared_bias$bias_df2,0.09, sum[1]), 
+                   df99 = c(MSE$MSE_df99,var_obs$var_df99,squared_bias$bias_df99,0.09, sum[2]))
+colnames(error_tbl) <- c("MSE","var","bias_sq","irr", "sum")
+error_df <- as.data.frame(error_tbl)
 ```
 
 
@@ -115,22 +162,25 @@ output tables comparing:
 
 where `sum = bias_squared + var + irreducible`. You can created cleanly formatted tables like the one above by piping a data frame into `knitr::kable(digits=4)`.
 
+```{r}
+error_df %>% kable(digits=4)
+```
 
-
+Note: The difference between MSE and sum is a result of the randomness created by using the rnorm() function to simulate the noise in the data set. However, since the sum falls within the range of 1 $\sigma^2 = 0.09$, the results displayed in the table remain reasonable.
 
 # Analysis
 
 **Questions**:
 
 1. Based on the topics covered in Lec 2.7, name one possible "sanity check" for your results. Name another if you can.
-1. In **two** sentences or less, give a rough sketch of what the procedure would
+2. In **two** sentences or less, give a rough sketch of what the procedure would
 be to get the breakdown of $$\mbox{MSE}\left[\widehat{f}(x)\right]$$ for *all*
 $x$ in this example, and not just for $$\mbox{MSE}\left[\widehat{f}(x_0)\right]
 = \mbox{MSE}\left[\widehat{f}(0.95)\right]$$.
-1. Which of the two models would you choose for predicting the point of interest and why?
+3. Which of the two models would you choose for predicting the point of interest and why?
 
 **Answers**:
 
-1.
-1.
-1.
+1. The first sanity check would be to compare my answer to the graphs presented in Lecture 2.7. The graphs give a range that my values should fall inside or near. If I come up with a value far outside the range presented in the graphs, I should reevaluate my calculations and then my method.
+2. The process of finding the MSE for all values would look very similar to the process used here. Except, instead of finding the MSE for $x_0=0.95$, we'd find the error using the mean(y_observed) compared to the $mean(f(x)+ \epsilon)$ over the range of possible x values. 
+3. Honestly, I would not use either of these models. $df=2$ is underfit and $df=99$ is overfit. Both have similar error, one due to bias and the other due to variance. A better model would use a df that falls somewhere between 2 and 99. 
