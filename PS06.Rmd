@@ -133,7 +133,7 @@ var_obs <- estimates %>% summarise(var_df2 = var(estimates_df2),
 #Calculating the squared bias for each model
 squared_bias <- estimates %>% summarise(mean_df2 = mean(estimates_df2), 
                                         mean_df99 = mean(estimates_df99)) %>% 
-  mutate(bias_df2 = (0.95 - mean_df2)^2,bias_df99 = (0.95 - mean_df99)^2) %>% 
+  mutate(bias_df2 = (0.95^2 - mean_df2)^2,bias_df99 = (0.95^2 - mean_df99)^2) %>% 
   select(bias_df2, bias_df99)
 
 #Combining into one data frame
@@ -166,7 +166,6 @@ where `sum = bias_squared + var + irreducible`. You can created cleanly formatte
 error_df %>% kable(digits=4)
 ```
 
-Note: The difference between MSE and sum is a result of the randomness created by using the rnorm() function to simulate the noise in the data set. However, since the sum falls within the range of 1 $\sigma^2 = 0.09$, the results displayed in the table remain reasonable.
 
 # Analysis
 
@@ -182,5 +181,7 @@ $x$ in this example, and not just for $$\mbox{MSE}\left[\widehat{f}(x_0)\right]
 **Answers**:
 
 1. The first sanity check would be to compare my answer to the graphs presented in Lecture 2.7. The graphs give a range that my values should fall inside or near. If I come up with a value far outside the range presented in the graphs, I should reevaluate my calculations and then my method.
-2. The process of finding the MSE for all values would look very similar to the process used here. Except, instead of finding the MSE for $x_0=0.95$, we'd find the error using the mean(y_observed) compared to the $mean(f(x)+ \epsilon)$ over the range of possible x values. 
-3. Honestly, I would not use either of these models. $df=2$ is underfit and $df=99$ is overfit. Both have similar error, one due to bias and the other due to variance. A better model would use a df that falls somewhere between 2 and 99. 
+2. The process of finding the MSE for all values would look very similar to the process used here. Except, instead of finding the MSE for $x_0=0.95$, we'd find the error using the $mean(y_{observed})$ compared to the $mean(f(x)+ \epsilon)$ over the range of possible x values. 
+3. Honestly, I would not use either of these models. $df=2$ is underfit and $df=99$ is overfit. Both have similar error, one due to bias and the other due to variance. A better model would use a df that falls somewhere between 2 and 99.  
+Update on 3: Andrew says, "You actually are correct in your assumption. The ideal spline has a # of df between 2 and 99. But if we had to choose between these two, which is slightly better?"  
+My response: The splines model with $df=2$ has a slightly lower MSE, so, if you hold a gun to my head, I'll choose this model. However, I must emphasize that choosing either model would be irresponsible and result in a poor prediction relative to the model created with optimal df. 
